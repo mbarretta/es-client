@@ -1,3 +1,5 @@
+package com.elastic.barretta.clients
+
 import groovy.util.logging.Slf4j
 import org.apache.http.HttpHost
 import org.apache.http.auth.AuthScope
@@ -11,6 +13,7 @@ import org.elasticsearch.client.RestHighLevelClient
 
 @Slf4j
 class ESClient {
+    @Delegate
     RestHighLevelClient client
     Config config
 
@@ -30,7 +33,7 @@ class ESClient {
     }
 
     private init() {
-        assert config != null, "ESClient is not configured: use ESClient(Config config) method to instantiate and put shit in it"
+        assert config != null, "ESClient is not configured: use com.elastic.barretta.clients.ESClient(Config config) method to instantiate and put shit in it"
         def url = new URL(config.url)
         final CredentialsProvider credentialsProvider = new BasicCredentialsProvider()
         credentialsProvider.setCredentials(AuthScope.ANY, new UsernamePasswordCredentials(config.user, config.pass))
