@@ -7,9 +7,15 @@ import org.apache.http.auth.UsernamePasswordCredentials
 import org.apache.http.client.CredentialsProvider
 import org.apache.http.impl.client.BasicCredentialsProvider
 import org.apache.http.impl.nio.client.HttpAsyncClientBuilder
+import org.elasticsearch.action.search.*
 import org.elasticsearch.client.RestClient
 import org.elasticsearch.client.RestClientBuilder
 import org.elasticsearch.client.RestHighLevelClient
+import org.elasticsearch.common.unit.TimeValue
+import org.elasticsearch.index.query.QueryBuilder
+import org.elasticsearch.search.Scroll
+import org.elasticsearch.search.SearchHit
+import org.elasticsearch.search.builder.SearchSourceBuilder
 
 @Slf4j
 class ESClient {
@@ -21,6 +27,7 @@ class ESClient {
         String url
         String user
         String pass
+        String index
     }
 
     ESClient(Config config) {
@@ -29,11 +36,11 @@ class ESClient {
     }
 
     def test() {
-       return client.ping()
+        return client.ping()
     }
 
     private init() {
-        assert config != null, "ESClient is not configured: use com.elastic.barretta.clients.ESClient(Config config) method to instantiate and put shit in it"
+        assert config != null, "ESClient is not configured: use ESClient(Config config) method to instantiate and put shit in it"
         def url = new URL(config.url)
         final CredentialsProvider credentialsProvider = new BasicCredentialsProvider()
         credentialsProvider.setCredentials(AuthScope.ANY, new UsernamePasswordCredentials(config.user, config.pass))
@@ -46,6 +53,36 @@ class ESClient {
             }
         })
         client = new RestHighLevelClient(builder)
+    }
+
+    def scrollQuery(QueryBuilder query, int batchSize = 100, Closure mapFunction = {}) {
+        final Scroll scroll = new Scroll(TimeValue.timeValueMinutes(1L))
+        SearchRequest searchRequest = new SearchRequest(config.index)
+        searchRequest.scroll(scroll)
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder()
+        searchSourceBuilder.size(batchSize)
+        searchSourceBuilder.query(query)
+        searchRequest.source(searchSourceBuilder)
+
+        SearchResponse searchResponse = client.search(searchRequest)
+        String scrollId = searchResponse.getScrollId()
+        SearchHit[] searchHits = searchResponse.getHits().getHits()
+
+        while (searchHits != null && searchHits.length > 0) {
+            searchHits.each {
+                mapFunction(it)
+            }
+            SearchScrollRequest scrollRequest = new SearchScrollRequest(scrollId)
+            scrollRequest.scroll(scroll)
+            searchResponse = client.searchScroll(scrollRequest)
+            scrollId = searchResponse.getScrollId()
+            searchHits = searchResponse.getHits().getHits()
+        }
+
+        ClearScrollRequest clearScrollRequest = new ClearScrollRequest()
+        clearScrollRequest.addScrollId(scrollId)
+        ClearScrollResponse clearScrollResponse = client.clearScroll(clearScrollRequest)
+        return clearScrollResponse.isSucceeded()
     }
 }
 
