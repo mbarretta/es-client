@@ -55,9 +55,9 @@ class ESClient {
         client = new RestHighLevelClient(builder)
     }
 
-    def scrollQuery(QueryBuilder query, int batchSize = 100, Closure mapFunction = {}) {
+    def scrollQuery(QueryBuilder query, int batchSize = 100, Closure mapFunction = {}, String index = config.index) {
         final Scroll scroll = new Scroll(TimeValue.timeValueMinutes(1L))
-        SearchRequest searchRequest = new SearchRequest(config.index)
+        SearchRequest searchRequest = new SearchRequest(index)
         searchRequest.scroll(scroll)
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder()
         searchSourceBuilder.size(batchSize)
