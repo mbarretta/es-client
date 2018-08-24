@@ -19,3 +19,8 @@ dependencies {
     )
     testCompile 'com.github.spockframework.spock:spock-core:4bcef77'
 }
+
+task sourcesJar(type: Jar) {
+    from sourceSets.main.allSource
+    classifier = 'sources'
+}

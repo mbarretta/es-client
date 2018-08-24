@@ -1,0 +1,6 @@
+esclient {
+    url = "http://localhost:9200"
+    user = "elastic"
+    pass = "changeme"
+    index = "temp"
+}
