@@ -68,7 +68,7 @@ class ESClient {
         String scrollId = searchResponse.getScrollId()
         SearchHit[] searchHits = searchResponse.getHits().getHits()
 
-        log.info("found [$searchHits.size()] hits")
+        log.info("found [${searchHits.size()}] hits")
         while (searchHits != null && searchHits.length > 0) {
             searchHits.each {
                 mapFunction(it)
