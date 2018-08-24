@@ -34,4 +34,12 @@ class ESClientSpec extends Specification {
         then:
         tempFile.text.length() > 0
     }
+
+    def "getIndicesFromPattern works"() {
+        when:
+        def response = esClient.getIndicesFromPattern(properties.esclient.index + "*")
+
+        then:
+        response.aliases.size() == 1
+    }
 }

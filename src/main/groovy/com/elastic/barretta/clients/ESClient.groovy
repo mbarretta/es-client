@@ -7,9 +7,11 @@ import org.apache.http.auth.UsernamePasswordCredentials
 import org.apache.http.client.CredentialsProvider
 import org.apache.http.impl.client.BasicCredentialsProvider
 import org.apache.http.impl.nio.client.HttpAsyncClientBuilder
+import org.elasticsearch.action.admin.indices.alias.get.GetAliasesRequest
 import org.elasticsearch.action.admin.indices.get.GetIndexRequest
 import org.elasticsearch.action.admin.indices.settings.get.GetSettingsRequest
 import org.elasticsearch.action.search.*
+import org.elasticsearch.action.support.IndicesOptions
 import org.elasticsearch.client.RequestOptions
 import org.elasticsearch.client.RestClient
 import org.elasticsearch.client.RestClientBuilder
@@ -89,8 +91,11 @@ class ESClient {
         return clearScrollResponse.isSucceeded()
     }
 
-    def getIndex(String index) {
-        return client.indices().get(new GetIndexRequest().indices(index), RequestOptions.DEFAULT)
+    def getIndicesFromPattern(String indexPattern) {
+        def request = new GetAliasesRequest().indices(indexPattern)
+//        request.includeDefaults(true)
+        request.indicesOptions(IndicesOptions.STRICT_EXPAND_OPEN)
+        return client.indices().getAlias(request, RequestOptions.DEFAULT)
     }
 }
 
