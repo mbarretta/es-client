@@ -7,7 +7,10 @@ import org.apache.http.auth.UsernamePasswordCredentials
 import org.apache.http.client.CredentialsProvider
 import org.apache.http.impl.client.BasicCredentialsProvider
 import org.apache.http.impl.nio.client.HttpAsyncClientBuilder
+import org.elasticsearch.action.admin.indices.get.GetIndexRequest
+import org.elasticsearch.action.admin.indices.settings.get.GetSettingsRequest
 import org.elasticsearch.action.search.*
+import org.elasticsearch.client.RequestOptions
 import org.elasticsearch.client.RestClient
 import org.elasticsearch.client.RestClientBuilder
 import org.elasticsearch.client.RestHighLevelClient
@@ -64,7 +67,7 @@ class ESClient {
         searchSourceBuilder.query(query)
         searchRequest.source(searchSourceBuilder)
 
-        SearchResponse searchResponse = client.search(searchRequest)
+        SearchResponse searchResponse = client.search(searchRequest, RequestOptions.DEFAULT)
         String scrollId = searchResponse.getScrollId()
         SearchHit[] searchHits = searchResponse.getHits().getHits()
 
@@ -75,7 +78,7 @@ class ESClient {
             }
             SearchScrollRequest scrollRequest = new SearchScrollRequest(scrollId)
             scrollRequest.scroll(scroll)
-            searchResponse = client.searchScroll(scrollRequest)
+            searchResponse = client.scroll(scrollRequest, RequestOptions.DEFAULT)
             scrollId = searchResponse.getScrollId()
             searchHits = searchResponse.getHits().getHits()
         }
@@ -84,6 +87,10 @@ class ESClient {
         clearScrollRequest.addScrollId(scrollId)
         ClearScrollResponse clearScrollResponse = client.clearScroll(clearScrollRequest)
         return clearScrollResponse.isSucceeded()
+    }
+
+    def getIndex(String index) {
+        return client.indices().get(new GetIndexRequest().indices(index), RequestOptions.DEFAULT)
     }
 }
 

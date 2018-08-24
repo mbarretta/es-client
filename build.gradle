@@ -13,7 +13,7 @@ repositories {
 dependencies {
     compile(
         'org.codehaus.groovy:groovy-all:2.5.2',
-        'org.elasticsearch.client:elasticsearch-rest-high-level-client:6.3.2',
+        'org.elasticsearch.client:elasticsearch-rest-high-level-client:6.4.0',
         'ch.qos.logback:logback-classic:1.2.3',
         'org.codehaus.gpars:gpars:1.2.1'
     )
