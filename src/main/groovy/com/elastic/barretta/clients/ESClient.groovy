@@ -99,7 +99,6 @@ class ESClient {
 
     def getIndex(String indexName) {
         GetIndexRequest request = new GetIndexRequest().indices(indexName)
-        request.includeDefaults(true)
         return client.indices().get(request, RequestOptions.DEFAULT)
     }
 }
