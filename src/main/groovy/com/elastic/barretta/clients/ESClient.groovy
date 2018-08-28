@@ -93,9 +93,14 @@ class ESClient {
 
     def getIndicesFromPattern(String indexPattern) {
         def request = new GetAliasesRequest().indices(indexPattern)
-//        request.includeDefaults(true)
         request.indicesOptions(IndicesOptions.STRICT_EXPAND_OPEN)
         return client.indices().getAlias(request, RequestOptions.DEFAULT)
+    }
+
+    def getIndex(String indexName) {
+        GetIndexRequest request = new GetIndexRequest().indices(indexName)
+        request.includeDefaults(true)
+        return client.indices().get(request, RequestOptions.DEFAULT)
     }
 }
 

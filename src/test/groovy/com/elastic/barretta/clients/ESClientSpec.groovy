@@ -42,4 +42,9 @@ class ESClientSpec extends Specification {
         then:
         response.aliases.size() == 1
     }
+
+    def "getIndex works"() {
+        expect:
+        esClient.getIndex(properties.esclient.index).toString().length() > 0
+    }
 }
