@@ -70,10 +70,10 @@ class ESClient {
         searchRequest.source(searchSourceBuilder)
 
         SearchResponse searchResponse = client.search(searchRequest, RequestOptions.DEFAULT)
-        String scrollId = searchResponse.getScrollId()
-        SearchHit[] searchHits = searchResponse.getHits().getHits()
+        String scrollId = searchResponse.scrollId
+        SearchHit[] searchHits = searchResponse.hits.hits
 
-        log.info("found [${searchHits.size()}] hits")
+        log.info("have [${searchHits.size()}] hits of [${searchResponse.hits.totalHits}]")
         while (searchHits != null && searchHits.length > 0) {
             searchHits.each {
                 mapFunction(it)
@@ -81,8 +81,8 @@ class ESClient {
             SearchScrollRequest scrollRequest = new SearchScrollRequest(scrollId)
             scrollRequest.scroll(scroll)
             searchResponse = client.scroll(scrollRequest, RequestOptions.DEFAULT)
-            scrollId = searchResponse.getScrollId()
-            searchHits = searchResponse.getHits().getHits()
+            scrollId = searchResponse.scrollId
+            searchHits = searchResponse.hits.hits
         }
 
         ClearScrollRequest clearScrollRequest = new ClearScrollRequest()

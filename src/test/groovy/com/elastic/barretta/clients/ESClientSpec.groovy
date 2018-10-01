@@ -1,5 +1,10 @@
 package com.elastic.barretta.clients
 
+import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest
+import org.elasticsearch.action.delete.DeleteRequest
+import org.elasticsearch.action.index.IndexRequest
+import org.elasticsearch.action.support.WriteRequest
+import org.elasticsearch.client.RequestOptions
 import org.elasticsearch.index.query.QueryBuilders
 import spock.lang.Shared
 import spock.lang.Specification
@@ -14,7 +19,17 @@ class ESClientSpec extends Specification {
     ESClient esClient
 
     def setupSpec() {
-        esClient = new ESClient(new ESClient.Config(user: properties.esclient.user, pass: properties.esclient.pass, url: properties.esclient.url, index: properties.esclient.index))
+        def indexRequest = new IndexRequest(properties.esclient.index, "_doc")
+            .source([field1: "value1", field2: 2])
+            .setRefreshPolicy(WriteRequest.RefreshPolicy.WAIT_UNTIL)
+        esClient = new ESClient(
+            new ESClient.Config(user: properties.esclient.user, pass: properties.esclient.pass, url: properties.esclient.url, index: properties.esclient.index)
+        )
+        esClient.index(indexRequest, RequestOptions.DEFAULT).forcedRefresh()
+    }
+
+    def cleanupSpec() {
+        esClient.indices().delete(new DeleteIndexRequest(properties.esclient.index), RequestOptions.DEFAULT)
     }
 
     def "ScrollQuery will run mapFunction"() {
