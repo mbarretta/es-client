@@ -99,7 +99,7 @@ class ESClient {
                 client.clearScroll(clearScrollRequest, RequestOptions.DEFAULT)
             }.asyncFun()
 
-            slices.times {
+            (0..slices).eachParallel {
                 sliceHandler(it).get()
             }
         }
