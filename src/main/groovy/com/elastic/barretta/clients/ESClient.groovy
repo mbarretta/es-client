@@ -1,6 +1,7 @@
 package com.elastic.barretta.clients
 
 import groovy.util.logging.Slf4j
+import groovyx.gpars.GParsPool
 import org.apache.http.HttpHost
 import org.apache.http.auth.AuthScope
 import org.apache.http.auth.UsernamePasswordCredentials
@@ -21,6 +22,9 @@ import org.elasticsearch.index.query.QueryBuilder
 import org.elasticsearch.search.Scroll
 import org.elasticsearch.search.SearchHit
 import org.elasticsearch.search.builder.SearchSourceBuilder
+import org.elasticsearch.search.slice.SliceBuilder
+
+import java.util.concurrent.atomic.AtomicInteger
 
 @Slf4j
 class ESClient {
@@ -62,33 +66,43 @@ class ESClient {
 
     def scrollQuery(QueryBuilder query, int batchSize = 100, Closure mapFunction = {}) {
         final Scroll scroll = new Scroll(TimeValue.timeValueMinutes(1L))
-        SearchRequest searchRequest = new SearchRequest(config.index)
-        searchRequest.scroll(scroll)
-        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder()
-        searchSourceBuilder.size(batchSize)
-        searchSourceBuilder.query(query)
-        searchRequest.source(searchSourceBuilder)
+        final def slices = 5
 
-        SearchResponse searchResponse = client.search(searchRequest, RequestOptions.DEFAULT)
-        String scrollId = searchResponse.scrollId
-        SearchHit[] searchHits = searchResponse.hits.hits
+        GParsPool.withPool(slices) {
+            def sliceHandler = { slice ->
+                def sliceBuilder = new SliceBuilder(slice, slices)
+                SearchRequest searchRequest = new SearchRequest(config.index)
+                searchRequest.scroll(scroll)
+                SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder()
+                searchSourceBuilder.size(batchSize)
+                searchSourceBuilder.slice(sliceBuilder)
+                searchSourceBuilder.query(query)
+                searchRequest.source(searchSourceBuilder)
+                def searchResponse = client.search(searchRequest, RequestOptions.DEFAULT)
 
-        log.info("have [${searchHits.size()}] hits of [${searchResponse.hits.totalHits}]")
-        while (searchHits != null && searchHits.length > 0) {
-            searchHits.each {
-                mapFunction(it)
+                String scrollId = searchResponse.scrollId
+                SearchHit[] searchHits = searchResponse.hits.hits
+
+                log.info("in slice [$slice] have [${searchHits.size()}] hits of [${searchResponse.hits.totalHits}]")
+                while (searchHits != null && searchHits.length > 0) {
+                    searchHits.each {
+                        mapFunction(it)
+                    }
+                    SearchScrollRequest scrollRequest = new SearchScrollRequest(scrollId)
+                    scrollRequest.scroll(scroll)
+                    searchResponse = client.scroll(scrollRequest, RequestOptions.DEFAULT)
+                    scrollId = searchResponse.scrollId
+                    searchHits = searchResponse.hits.hits
+                }
+                ClearScrollRequest clearScrollRequest = new ClearScrollRequest()
+                clearScrollRequest.addScrollId(scrollId)
+                client.clearScroll(clearScrollRequest, RequestOptions.DEFAULT)
+            }.asyncFun()
+
+            slices.times {
+                sliceHandler(it).get()
             }
-            SearchScrollRequest scrollRequest = new SearchScrollRequest(scrollId)
-            scrollRequest.scroll(scroll)
-            searchResponse = client.scroll(scrollRequest, RequestOptions.DEFAULT)
-            scrollId = searchResponse.scrollId
-            searchHits = searchResponse.hits.hits
         }
-
-        ClearScrollRequest clearScrollRequest = new ClearScrollRequest()
-        clearScrollRequest.addScrollId(scrollId)
-        ClearScrollResponse clearScrollResponse = client.clearScroll(clearScrollRequest)
-        return clearScrollResponse.isSucceeded()
     }
 
     def getIndicesFromPattern(String indexPattern) {
