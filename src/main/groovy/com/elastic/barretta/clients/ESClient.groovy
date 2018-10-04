@@ -68,39 +68,40 @@ class ESClient {
         final Scroll scroll = new Scroll(TimeValue.timeValueMinutes(1L))
         final def slices = 5
 
-        GParsPool.withPool(slices) {
-            def sliceHandler = { slice ->
-                def sliceBuilder = new SliceBuilder(slice, slices)
-                SearchRequest searchRequest = new SearchRequest(config.index)
-                searchRequest.scroll(scroll)
-                SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder()
-                searchSourceBuilder.size(batchSize)
-                searchSourceBuilder.slice(sliceBuilder)
-                searchSourceBuilder.query(query)
-                searchRequest.source(searchSourceBuilder)
-                def searchResponse = client.search(searchRequest, RequestOptions.DEFAULT)
+        def sliceHandler = { slice ->
+            def sliceBuilder = new SliceBuilder(slice, slices)
+            SearchRequest searchRequest = new SearchRequest(config.index)
+            searchRequest.scroll(scroll)
+            SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder()
+            searchSourceBuilder.size(batchSize)
+            searchSourceBuilder.slice(sliceBuilder)
+            searchSourceBuilder.query(query)
+            searchRequest.source(searchSourceBuilder)
+            def searchResponse = client.search(searchRequest, RequestOptions.DEFAULT)
 
-                String scrollId = searchResponse.scrollId
-                SearchHit[] searchHits = searchResponse.hits.hits
+            String scrollId = searchResponse.scrollId
+            SearchHit[] searchHits = searchResponse.hits.hits
 
-                log.info("in slice [$slice] have [${searchHits.size()}] hits of [${searchResponse.hits.totalHits}]")
-                while (searchHits != null && searchHits.length > 0) {
-                    searchHits.each {
-                        mapFunction(it)
-                    }
-                    SearchScrollRequest scrollRequest = new SearchScrollRequest(scrollId)
-                    scrollRequest.scroll(scroll)
-                    searchResponse = client.scroll(scrollRequest, RequestOptions.DEFAULT)
-                    scrollId = searchResponse.scrollId
-                    searchHits = searchResponse.hits.hits
+            log.info("in slice [$slice][$scrollId] with [${searchResponse.hits.totalHits}] total hits")
+            while (searchHits != null && searchHits.length > 0) {
+                log.info("working [${searchHits.size()}] hits in slice [$slice]")
+                searchHits.each {
+                    mapFunction(it)
                 }
-                ClearScrollRequest clearScrollRequest = new ClearScrollRequest()
-                clearScrollRequest.addScrollId(scrollId)
-                client.clearScroll(clearScrollRequest, RequestOptions.DEFAULT)
-            }.asyncFun()
+                SearchScrollRequest scrollRequest = new SearchScrollRequest(scrollId)
+                scrollRequest.scroll(scroll)
+                searchResponse = client.scroll(scrollRequest, RequestOptions.DEFAULT)
+                scrollId = searchResponse.scrollId
+                searchHits = searchResponse.hits.hits
+            }
+            ClearScrollRequest clearScrollRequest = new ClearScrollRequest()
+            clearScrollRequest.addScrollId(scrollId)
+            client.clearScroll(clearScrollRequest, RequestOptions.DEFAULT)
+        }
 
-            (0..slices).eachParallel {
-                sliceHandler(it).get()
+        GParsPool.withPool {
+            (0..slices-1).eachParallel {
+                sliceHandler(it)
             }
         }
     }

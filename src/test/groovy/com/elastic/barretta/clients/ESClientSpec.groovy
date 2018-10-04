@@ -35,9 +35,8 @@ class ESClientSpec extends Specification {
     def "ScrollQuery will run mapFunction"() {
         setup:
         def tempFile = Files.createTempFile(null, null).toFile()
-        def tempFileWriter = new FileWriter(tempFile)
         def mapFunction = {
-            tempFileWriter.withWriter { writer ->
+            new FileWriter(tempFile).withWriter { writer ->
                 writer << it
             }
         }
