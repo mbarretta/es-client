@@ -65,11 +65,11 @@ class ESClient {
     }
 
     def scrollQuery(QueryBuilder query, int batchSize, Closure mapFunction) {
-        scrollQuery(query, batchSize, 5, mapFunction)
+        scrollQuery(query, batchSize, 5, 1, mapFunction)
     }
 
-    def scrollQuery(QueryBuilder query, int batchSize, int slices, Closure mapFunction) {
-        final Scroll scroll = new Scroll(TimeValue.timeValueMinutes(1L))
+    def scrollQuery(QueryBuilder query, int batchSize, int slices, int minutes, Closure mapFunction) {
+        final Scroll scroll = new Scroll(TimeValue.timeValueMinutes(minutes as long))
 
         def sliceHandler = { slice ->
             def sliceBuilder = new SliceBuilder(slice, slices)
