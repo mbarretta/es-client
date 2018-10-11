@@ -80,9 +80,9 @@ class ESClient {
             String scrollId = searchResponse.scrollId
             SearchHit[] searchHits = searchResponse.hits.hits
 
-            log.info("in slice [$slice][$scrollId] with [${searchResponse.hits.totalHits}] total hits")
+            log.info("in slice [$slice] with [${searchResponse.hits.totalHits}] total hits")
             while (searchHits != null && searchHits.length > 0) {
-                log.debug("working [${searchHits.length}] hits in slice [$slice]")
+                log.debug("working [${searchHits.length}] hits in slice [$slice] and scroll [$scrollId]")
                 searchHits.each {
                     mapFunction(it)
                 }
@@ -91,6 +91,7 @@ class ESClient {
                 scrollId = searchResponse.scrollId
                 searchHits = searchResponse.hits.hits
             }
+            log.info("...done with slice [$slice]")
             ClearScrollRequest clearScrollRequest = new ClearScrollRequest()
             clearScrollRequest.addScrollId(scrollId)
             client.clearScroll(clearScrollRequest, RequestOptions.DEFAULT)
