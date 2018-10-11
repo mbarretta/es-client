@@ -43,7 +43,7 @@ class ESClientSpec extends Specification {
         def query = QueryBuilders.queryStringQuery("*")
 
         when:
-        esClient.scrollQuery(query, 10, mapFunction)
+        esClient.scrollQuery(query, 10, 2, mapFunction)
 
         then:
         tempFile.text.length() > 0

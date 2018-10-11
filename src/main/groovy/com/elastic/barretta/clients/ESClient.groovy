@@ -45,7 +45,7 @@ class ESClient {
     }
 
     def test() {
-        return client.ping()
+        return client.ping(RequestOptions.DEFAULT)
     }
 
     private init() {
@@ -64,19 +64,17 @@ class ESClient {
         client = new RestHighLevelClient(builder)
     }
 
-    def scrollQuery(QueryBuilder query, int batchSize = 100, Closure mapFunction = {}) {
+    def scrollQuery(QueryBuilder query, int batchSize, Closure mapFunction) {
+        scrollQuery(query, batchSize, 5, mapFunction)
+    }
+
+    def scrollQuery(QueryBuilder query, int batchSize, int slices, Closure mapFunction) {
         final Scroll scroll = new Scroll(TimeValue.timeValueMinutes(1L))
-        final def slices = 5
 
         def sliceHandler = { slice ->
             def sliceBuilder = new SliceBuilder(slice, slices)
-            SearchRequest searchRequest = new SearchRequest(config.index)
-            searchRequest.scroll(scroll)
-            SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder()
-            searchSourceBuilder.size(batchSize)
-            searchSourceBuilder.slice(sliceBuilder)
-            searchSourceBuilder.query(query)
-            searchRequest.source(searchSourceBuilder)
+            def searchSourceBuilder = new SearchSourceBuilder().size(batchSize).slice(sliceBuilder).query(query)
+            def searchRequest = new SearchRequest(config.index).scroll(scroll).source(searchSourceBuilder)
             def searchResponse = client.search(searchRequest, RequestOptions.DEFAULT)
 
             String scrollId = searchResponse.scrollId
@@ -84,12 +82,11 @@ class ESClient {
 
             log.info("in slice [$slice][$scrollId] with [${searchResponse.hits.totalHits}] total hits")
             while (searchHits != null && searchHits.length > 0) {
-                log.info("working [${searchHits.size()}] hits in slice [$slice]")
+                log.debug("working [${searchHits.length}] hits in slice [$slice]")
                 searchHits.each {
                     mapFunction(it)
                 }
-                SearchScrollRequest scrollRequest = new SearchScrollRequest(scrollId)
-                scrollRequest.scroll(scroll)
+                SearchScrollRequest scrollRequest = new SearchScrollRequest(scrollId).scroll(scroll)
                 searchResponse = client.scroll(scrollRequest, RequestOptions.DEFAULT)
                 scrollId = searchResponse.scrollId
                 searchHits = searchResponse.hits.hits
@@ -100,7 +97,7 @@ class ESClient {
         }
 
         GParsPool.withPool {
-            (0..slices-1).eachParallel {
+            (0..slices - 1).eachParallel {
                 sliceHandler(it)
             }
         }
