@@ -1,11 +1,13 @@
 package com.elastic.barretta.clients
 
 import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest
-import org.elasticsearch.action.delete.DeleteRequest
+import org.elasticsearch.action.admin.indices.flush.FlushRequest
 import org.elasticsearch.action.index.IndexRequest
+import org.elasticsearch.action.search.SearchRequest
 import org.elasticsearch.action.support.WriteRequest
 import org.elasticsearch.client.RequestOptions
 import org.elasticsearch.index.query.QueryBuilders
+import org.elasticsearch.search.builder.SearchSourceBuilder
 import spock.lang.Shared
 import spock.lang.Specification
 
@@ -60,5 +62,25 @@ class ESClientSpec extends Specification {
     def "getIndex works"() {
         expect:
         esClient.getIndex(properties.esclient.index).toString().length() > 0
+    }
+
+    def "bulk Insert works"() {
+        setup:
+        def data = [(ESClient.BulkOps.INSERT): [
+            [bulkTest: "a"],
+            [bulkTest: "b"]
+        ]
+        ]
+        def search = new SearchRequest(indices: [properties.esclient.index])
+        def source = new SearchSourceBuilder()
+        source.query(QueryBuilders.termsQuery("bulkTest.keyword", "a", "b"))
+        search.source(source)
+
+        when:
+        esClient.bulk(data)
+        esClient.indices().flush(new FlushRequest("temp"), RequestOptions.DEFAULT)
+
+        then:
+        esClient.search(search, RequestOptions.DEFAULT).hits.totalHits == 2
     }
 }

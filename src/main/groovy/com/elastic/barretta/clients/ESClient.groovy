@@ -8,11 +8,19 @@ import org.apache.http.auth.UsernamePasswordCredentials
 import org.apache.http.client.CredentialsProvider
 import org.apache.http.impl.client.BasicCredentialsProvider
 import org.apache.http.impl.nio.client.HttpAsyncClientBuilder
+import org.elasticsearch.action.DocWriteRequest
 import org.elasticsearch.action.admin.indices.alias.get.GetAliasesRequest
 import org.elasticsearch.action.admin.indices.get.GetIndexRequest
-import org.elasticsearch.action.admin.indices.settings.get.GetSettingsRequest
-import org.elasticsearch.action.search.*
+import org.elasticsearch.action.bulk.BulkProcessor
+import org.elasticsearch.action.bulk.BulkRequest
+import org.elasticsearch.action.bulk.BulkResponse
+import org.elasticsearch.action.delete.DeleteRequest
+import org.elasticsearch.action.index.IndexRequest
+import org.elasticsearch.action.search.ClearScrollRequest
+import org.elasticsearch.action.search.SearchRequest
+import org.elasticsearch.action.search.SearchScrollRequest
 import org.elasticsearch.action.support.IndicesOptions
+import org.elasticsearch.action.update.UpdateRequest
 import org.elasticsearch.client.RequestOptions
 import org.elasticsearch.client.RestClient
 import org.elasticsearch.client.RestClientBuilder
@@ -24,13 +32,16 @@ import org.elasticsearch.search.SearchHit
 import org.elasticsearch.search.builder.SearchSourceBuilder
 import org.elasticsearch.search.slice.SliceBuilder
 
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.TimeUnit
 
 @Slf4j
 class ESClient {
     @Delegate
     RestHighLevelClient client
     Config config
+    static enum BulkOps {
+        INSERT, CREATE, UPDATE, DELETE
+    }
 
     static class Config {
         String url
@@ -113,6 +124,52 @@ class ESClient {
     def getIndex(String indexName) {
         GetIndexRequest request = new GetIndexRequest().indices(indexName)
         return client.indices().get(request, RequestOptions.DEFAULT)
+    }
+
+    def bulkInsert(List<Map> records, String index = config.index) {
+        return bulk([(BulkOps.INSERT): records], index)
+    }
+
+    //todo: error handling - do better
+    def bulk(Map<BulkOps, List<Map>> records, String index = config.index) {
+
+        init()
+
+        def listener = new BulkProcessor.Listener() {
+
+            @Override
+            void beforeBulk(long executionId, BulkRequest request) {
+                log.info("bulk-ing [${request.numberOfActions()}] records to [$index]")
+            }
+
+            @Override
+            void afterBulk(long executionId, BulkRequest request, BulkResponse response) {
+                log.info("successfully bulked [$response.items.length]")
+            }
+
+            @Override
+            void afterBulk(long executionId, BulkRequest request, Throwable failure) {
+                log.error("error running bulk insert [$failure.message]", failure)
+
+            }
+        }
+        def builder = BulkProcessor.builder(client.&bulkAsync, listener).setFlushInterval(TimeValue.timeValueSeconds(5L)).build()
+
+        records[BulkOps.INSERT].each {
+            builder.add(new IndexRequest(index, "_doc").source(it))
+        }
+        records[BulkOps.CREATE].each {
+            builder.add(new IndexRequest(index, "_doc").opType(DocWriteRequest.OpType.CREATE).source(it))
+        }
+        records[BulkOps.UPDATE].each {
+            builder.add(new UpdateRequest(index, "_doc", it._id).doc(it))
+        }
+        records[BulkOps.DELETE].each {
+            def id = it.containsKey('_id') ? it._id : it.id
+            builder.add(new DeleteRequest(index, "_doc", id))
+        }
+
+        builder.awaitClose(5l, TimeUnit.SECONDS)
     }
 }
 
