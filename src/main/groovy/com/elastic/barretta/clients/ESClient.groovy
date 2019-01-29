@@ -91,7 +91,7 @@ class ESClient {
             String scrollId = searchResponse.scrollId
             SearchHit[] searchHits = searchResponse.hits.hits
 
-            log.info("in slice [$slice] with [${searchResponse.hits.totalHits}] total hits")
+            log.trace("in slice [$slice] with [${searchResponse.hits.totalHits}] total hits")
             while (searchHits != null && searchHits.length > 0) {
                 log.debug("working [${searchHits.length}] hits in slice [$slice] and scroll [$scrollId]")
                 searchHits.each {
@@ -102,7 +102,7 @@ class ESClient {
                 scrollId = searchResponse.scrollId
                 searchHits = searchResponse.hits.hits
             }
-            log.info("...done with slice [$slice]")
+            log.trace("...done with slice [$slice]")
             ClearScrollRequest clearScrollRequest = new ClearScrollRequest()
             clearScrollRequest.addScrollId(scrollId)
             client.clearScroll(clearScrollRequest, RequestOptions.DEFAULT)
@@ -139,12 +139,12 @@ class ESClient {
 
             @Override
             void beforeBulk(long executionId, BulkRequest request) {
-                log.info("bulk-ing [${request.numberOfActions()}] records to [$index]")
+                log.trace("bulk-ing [${request.numberOfActions()}] records to [$index]")
             }
 
             @Override
             void afterBulk(long executionId, BulkRequest request, BulkResponse response) {
-                log.info("successfully bulked [$response.items.length]")
+                log.trace("successfully bulked [$response.items.length]")
             }
 
             @Override
