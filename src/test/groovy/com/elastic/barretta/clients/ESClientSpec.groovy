@@ -2,6 +2,7 @@ package com.elastic.barretta.clients
 
 import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest
 import org.elasticsearch.action.admin.indices.flush.FlushRequest
+import org.elasticsearch.action.get.GetRequest
 import org.elasticsearch.action.index.IndexRequest
 import org.elasticsearch.action.search.SearchRequest
 import org.elasticsearch.action.support.WriteRequest
@@ -78,9 +79,30 @@ class ESClientSpec extends Specification {
 
         when:
         esClient.bulk(data)
-        esClient.indices().flush(new FlushRequest("temp"), RequestOptions.DEFAULT)
+        esClient.indices().flush(new FlushRequest(properties.esclient.index), RequestOptions.DEFAULT)
 
         then:
         esClient.search(search, RequestOptions.DEFAULT).hits.totalHits == 2
+    }
+
+    def "bulk insert works when source docs contain an _id"() {
+        setup:
+        def data = [(ESClient.BulkOps.INSERT): [
+            [bulkTest: "a", "_id":"1"],
+            [bulkTest: "b", "_id":"2"]
+        ]
+        ]
+        def search = new SearchRequest(indices: [properties.esclient.index])
+        def source = new SearchSourceBuilder()
+        source.query(QueryBuilders.termsQuery("bulkTest.keyword", "a", "b"))
+        search.source(source)
+
+        when:
+        esClient.bulk(data)
+        esClient.indices().flush(new FlushRequest(properties.esclient.index), RequestOptions.DEFAULT)
+
+        then:
+        esClient.search(search, RequestOptions.DEFAULT).hits.totalHits == 2
+        esClient.get(new GetRequest(properties.esclient.index, "_doc", "1"), RequestOptions.DEFAULT).isExists()
     }
 }

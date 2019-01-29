@@ -156,17 +156,27 @@ class ESClient {
         def builder = BulkProcessor.builder(client.&bulkAsync, listener).setFlushInterval(TimeValue.timeValueSeconds(5L)).build()
 
         records[BulkOps.INSERT].each {
-            builder.add(new IndexRequest(index, "_doc").source(it))
+            if (it._id) {
+                def id = it.remove("_id")
+                builder.add(new IndexRequest(index, "_doc", id).source(it))
+            } else {
+                builder.add(new IndexRequest(index, "_doc").source(it))
+            }
         }
         records[BulkOps.CREATE].each {
-            builder.add(new IndexRequest(index, "_doc").opType(DocWriteRequest.OpType.CREATE).source(it))
+            if (it._id) {
+                def id = it.remove("_id")
+                builder.add(new IndexRequest(index, "_doc", id).opType(DocWriteRequest.OpType.CREATE).source(it))
+            } else {
+                builder.add(new IndexRequest(index, "_doc").opType(DocWriteRequest.OpType.CREATE).source(it))
+            }
         }
         records[BulkOps.UPDATE].each {
-            builder.add(new UpdateRequest(index, "_doc", it._id).doc(it))
+            def id = it.remove("_id")
+            builder.add(new UpdateRequest(index, "_doc", id).doc(it))
         }
         records[BulkOps.DELETE].each {
-            def id = it.containsKey('_id') ? it._id : it.id
-            builder.add(new DeleteRequest(index, "_doc", id))
+            builder.add(new DeleteRequest(index, "_doc", it._id))
         }
 
         builder.awaitClose(5l, TimeUnit.SECONDS)
