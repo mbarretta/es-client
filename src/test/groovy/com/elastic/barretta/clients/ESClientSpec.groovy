@@ -105,4 +105,12 @@ class ESClientSpec extends Specification {
         esClient.search(search, RequestOptions.DEFAULT).hits.totalHits == 2
         esClient.get(new GetRequest(properties.esclient.index, "_doc", "1"), RequestOptions.DEFAULT).isExists()
     }
+
+    def "term query works"() {
+        when:
+        def response = esClient.termQuery("field1", "value1")
+
+        then:
+        response.hits.totalHits == 1l
+    }
 }
