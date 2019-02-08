@@ -114,6 +114,7 @@ class ESClient {
                 sliceHandler(it)
             }
         }
+
     }
 
     def getIndicesFromPattern(String indexPattern) {
@@ -128,13 +129,15 @@ class ESClient {
     }
 
     def bulkInsert(List<Map> records, String index = config.index) {
-        return bulk([(BulkOps.INSERT): records], index)
+        return bulk([(BulkOps.INSERT): records], 500, index)
+    }
+
+    def bulk(Map<BulkOps, List<Map>> records, String index = config.index) {
+        bulk(records, 500, index)
     }
 
     //todo: error handling - do better
-    def bulk(Map<BulkOps, List<Map>> records, String index = config.index) {
-
-        init()
+    def bulk(Map<BulkOps, List<Map>> records, int size, String index = config.index) {
 
         def listener = new BulkProcessor.Listener() {
 
@@ -154,7 +157,10 @@ class ESClient {
 
             }
         }
-        def builder = BulkProcessor.builder(client.&bulkAsync, listener).setFlushInterval(TimeValue.timeValueSeconds(5L)).build()
+
+        def builder = BulkProcessor.builder(client.&bulkAsync, listener)
+            .setFlushInterval(TimeValue.timeValueSeconds(5L))
+            .setBulkActions(size).build()
 
         records[BulkOps.INSERT].each {
             if (it._id) {
