@@ -63,16 +63,21 @@ class ESClient {
     private init() {
         assert config != null, "ESClient is not configured: use ESClient(Config config) method to instantiate and put shit in it"
         def url = new URL(config.url)
-        final CredentialsProvider credentialsProvider = new BasicCredentialsProvider()
-        credentialsProvider.setCredentials(AuthScope.ANY, new UsernamePasswordCredentials(config.user, config.pass))
-
         def builder = RestClient.builder(new HttpHost(url.host, url.port, url.protocol))
-            .setHttpClientConfigCallback(new RestClientBuilder.HttpClientConfigCallback() {
-            @Override
-            public HttpAsyncClientBuilder customizeHttpClient(HttpAsyncClientBuilder httpClientBuilder) {
-                return httpClientBuilder.setDefaultCredentialsProvider(credentialsProvider)
-            }
-        })
+        if (config.user) {
+            final CredentialsProvider credentialsProvider = new BasicCredentialsProvider()
+            credentialsProvider.setCredentials(AuthScope.ANY, new UsernamePasswordCredentials(config.user, config.pass))
+
+            builder.setHttpClientConfigCallback(
+                new RestClientBuilder.HttpClientConfigCallback() {
+                    @Override
+                    public HttpAsyncClientBuilder customizeHttpClient(HttpAsyncClientBuilder httpClientBuilder) {
+                        return httpClientBuilder.setDefaultCredentialsProvider(credentialsProvider)
+                    }
+                }
+            )
+        }
+
         client = new RestHighLevelClient(builder)
     }
 
@@ -191,6 +196,15 @@ class ESClient {
 
     def termQuery(String field, value, String index = config.index) {
         return client.search(new SearchRequest(index).source(new SearchSourceBuilder().query(QueryBuilders.termQuery(field, value))), RequestOptions.DEFAULT)
+    }
+
+    def index(Map doc, String index = config.index) {
+        def request = new IndexRequest(index, "_doc")
+        if (doc._id) {
+            request.id(doc._id)
+        }
+        request.source(doc)
+        return client.index(request, RequestOptions.DEFAULT)
     }
 }
 
