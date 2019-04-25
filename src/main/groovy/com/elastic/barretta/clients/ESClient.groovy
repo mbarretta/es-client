@@ -8,6 +8,7 @@ import org.apache.http.auth.UsernamePasswordCredentials
 import org.apache.http.client.CredentialsProvider
 import org.apache.http.impl.client.BasicCredentialsProvider
 import org.apache.http.impl.nio.client.HttpAsyncClientBuilder
+import org.elasticsearch.action.ActionListener
 import org.elasticsearch.action.DocWriteRequest
 import org.elasticsearch.action.admin.indices.alias.get.GetAliasesRequest
 import org.elasticsearch.action.admin.indices.get.GetIndexRequest
@@ -20,6 +21,7 @@ import org.elasticsearch.action.search.ClearScrollRequest
 import org.elasticsearch.action.search.SearchRequest
 import org.elasticsearch.action.search.SearchScrollRequest
 import org.elasticsearch.action.support.IndicesOptions
+import org.elasticsearch.action.support.WriteRequest
 import org.elasticsearch.action.update.UpdateRequest
 import org.elasticsearch.client.RequestOptions
 import org.elasticsearch.client.RestClient
@@ -144,54 +146,46 @@ class ESClient {
     //todo: error handling - do better
     def bulk(Map<BulkOps, List<Map>> records, int size, String index = config.index) {
 
-        def listener = new BulkProcessor.Listener() {
+//        ActionListener<BulkResponse> listener = new ActionListener<BulkResponse>() {
+//            @Override
+//            public void onResponse(BulkResponse bulkResponse) {
+//                log.trace("successfully bulked [$bulkResponse.items.length]")
+//            }
+//
+//            @Override
+//            public void onFailure(Exception e) {
+//                log.error("nuts", e)
+//            }
+//        }
 
-            @Override
-            void beforeBulk(long executionId, BulkRequest request) {
-                log.trace("bulk-ing [${request.numberOfActions()}] records to [$index]")
-            }
-
-            @Override
-            void afterBulk(long executionId, BulkRequest request, BulkResponse response) {
-                log.trace("successfully bulked [$response.items.length]")
-            }
-
-            @Override
-            void afterBulk(long executionId, BulkRequest request, Throwable failure) {
-                log.error("error running bulk insert [$failure.message]", failure)
-
-            }
-        }
-
-        def builder = BulkProcessor.builder(client.&bulkAsync, listener)
-            .setFlushInterval(TimeValue.timeValueSeconds(5L))
-            .setBulkActions(size).build()
+        def request = new BulkRequest().timeout(TimeValue.timeValueSeconds(5L)).setRefreshPolicy(WriteRequest.RefreshPolicy.WAIT_UNTIL)
 
         records[BulkOps.INSERT].each {
             if (it._id) {
                 def id = it.remove("_id")
-                builder.add(new IndexRequest(index, "_doc", id).source(it))
+                request.add(new IndexRequest(index).id(id).source(it))
             } else {
-                builder.add(new IndexRequest(index, "_doc").source(it))
+                request.add(new IndexRequest(index).source(it))
             }
         }
         records[BulkOps.CREATE].each {
             if (it._id) {
                 def id = it.remove("_id")
-                builder.add(new IndexRequest(index, "_doc", id).opType(DocWriteRequest.OpType.CREATE).source(it))
+                request.add(new IndexRequest(index).id(id).opType(DocWriteRequest.OpType.CREATE).source(it))
             } else {
-                builder.add(new IndexRequest(index, "_doc").opType(DocWriteRequest.OpType.CREATE).source(it))
+                request.add(new IndexRequest(index).opType(DocWriteRequest.OpType.CREATE).source(it))
             }
         }
         records[BulkOps.UPDATE].each {
             def id = it.remove("_id")
-            builder.add(new UpdateRequest(index, "_doc", id).doc(it))
+            request.add(new UpdateRequest(index, id).doc(it))
         }
         records[BulkOps.DELETE].each {
-            builder.add(new DeleteRequest(index, "_doc", it._id))
+            request.add(new DeleteRequest(index, it._id))
         }
 
-        builder.awaitClose(5l, TimeUnit.SECONDS)
+//        client.bulkAsync(request, RequestOptions.DEFAULT, listener)
+        client.bulk(request, RequestOptions.DEFAULT)
     }
 
     def termQuery(String field, value, String index = config.index) {

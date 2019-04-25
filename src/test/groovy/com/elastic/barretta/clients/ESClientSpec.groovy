@@ -82,7 +82,7 @@ class ESClientSpec extends Specification {
         esClient.indices().flush(new FlushRequest(properties.esclient.index), RequestOptions.DEFAULT)
 
         then:
-        esClient.search(search, RequestOptions.DEFAULT).hits.totalHits == 2
+        esClient.search(search, RequestOptions.DEFAULT).hits.totalHits.value == 2
     }
 
     def "bulk insert works when source docs contain an _id"() {
@@ -102,7 +102,7 @@ class ESClientSpec extends Specification {
         esClient.indices().flush(new FlushRequest(properties.esclient.index), RequestOptions.DEFAULT)
 
         then:
-        esClient.search(search, RequestOptions.DEFAULT).hits.totalHits == 2
+        esClient.search(search, RequestOptions.DEFAULT).hits.totalHits.value == 2
         esClient.get(new GetRequest(properties.esclient.index, "_doc", "1"), RequestOptions.DEFAULT).isExists()
     }
 
@@ -111,6 +111,6 @@ class ESClientSpec extends Specification {
         def response = esClient.termQuery("field1", "value1")
 
         then:
-        response.hits.totalHits == 1l
+        response.hits.totalHits.value == 1l
     }
 }
