@@ -22,7 +22,7 @@ class ESClientSpec extends Specification {
     ESClient esClient
 
     def setupSpec() {
-        def indexRequest = new IndexRequest(properties.esclient.index, "_doc")
+        def indexRequest = new IndexRequest(properties.esclient.index)
             .source([field1: "value1", field2: 2])
             .setRefreshPolicy(WriteRequest.RefreshPolicy.WAIT_UNTIL)
         esClient = new ESClient(
@@ -88,13 +88,13 @@ class ESClientSpec extends Specification {
     def "bulk insert works when source docs contain an _id"() {
         setup:
         def data = [(ESClient.BulkOps.INSERT): [
-            [bulkTest: "a", "_id":"1"],
-            [bulkTest: "b", "_id":"2"]
+            [bulkTest: "c", "_id":"1"],
+            [bulkTest: "d", "_id":"2"]
         ]
         ]
         def search = new SearchRequest(indices: [properties.esclient.index])
         def source = new SearchSourceBuilder()
-        source.query(QueryBuilders.termsQuery("bulkTest.keyword", "a", "b"))
+        source.query(QueryBuilders.termsQuery("bulkTest.keyword", "c", "d"))
         search.source(source)
 
         when:
@@ -103,7 +103,7 @@ class ESClientSpec extends Specification {
 
         then:
         esClient.search(search, RequestOptions.DEFAULT).hits.totalHits.value == 2
-        esClient.get(new GetRequest(properties.esclient.index, "_doc", "1"), RequestOptions.DEFAULT).isExists()
+        esClient.get(new GetRequest(properties.esclient.index, "1"), RequestOptions.DEFAULT).isExists()
     }
 
     def "term query works"() {
