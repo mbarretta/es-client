@@ -1,5 +1,6 @@
 package com.elastic.barretta.clients
 
+import groovy.json.JsonOutput
 import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest
 import org.elasticsearch.action.admin.indices.flush.FlushRequest
 import org.elasticsearch.action.get.GetRequest
@@ -112,5 +113,28 @@ class ESClientSpec extends Specification {
 
         then:
         response.hits.totalHits.value == 1l
+    }
+
+    def "existsByMatch works"() {
+        expect:
+        esClient.existsByMatch("field1", "value1")
+        !esClient.existsByMatch("foo", "bar")
+    }
+
+    def "getByMatch works"() {
+        when:
+        def response = esClient.getByMatch("field1", "value1")
+
+        then:
+        response.hits.totalHits.value == 1l
+    }
+
+    def "rawRequest works"() {
+        when:
+        def response = esClient.rawRequest("GET", "/${properties.esclient.index}/_search", [query: [match: [field1: "value1"]]])
+
+        then:
+        response != null
+        response.hits.total.value == 1
     }
 }

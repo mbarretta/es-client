@@ -1,5 +1,7 @@
 package com.elastic.barretta.clients
 
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
 import groovy.util.logging.Slf4j
 import groovyx.gpars.GParsPool
 import org.apache.http.HttpHost
@@ -8,13 +10,10 @@ import org.apache.http.auth.UsernamePasswordCredentials
 import org.apache.http.client.CredentialsProvider
 import org.apache.http.impl.client.BasicCredentialsProvider
 import org.apache.http.impl.nio.client.HttpAsyncClientBuilder
-import org.elasticsearch.action.ActionListener
 import org.elasticsearch.action.DocWriteRequest
 import org.elasticsearch.action.admin.indices.alias.get.GetAliasesRequest
 import org.elasticsearch.action.admin.indices.get.GetIndexRequest
-import org.elasticsearch.action.bulk.BulkProcessor
 import org.elasticsearch.action.bulk.BulkRequest
-import org.elasticsearch.action.bulk.BulkResponse
 import org.elasticsearch.action.delete.DeleteRequest
 import org.elasticsearch.action.index.IndexRequest
 import org.elasticsearch.action.search.ClearScrollRequest
@@ -23,19 +22,19 @@ import org.elasticsearch.action.search.SearchScrollRequest
 import org.elasticsearch.action.support.IndicesOptions
 import org.elasticsearch.action.support.WriteRequest
 import org.elasticsearch.action.update.UpdateRequest
+import org.elasticsearch.client.Request
 import org.elasticsearch.client.RequestOptions
 import org.elasticsearch.client.RestClient
 import org.elasticsearch.client.RestClientBuilder
 import org.elasticsearch.client.RestHighLevelClient
 import org.elasticsearch.common.unit.TimeValue
+import org.elasticsearch.index.query.MatchQueryBuilder
 import org.elasticsearch.index.query.QueryBuilder
 import org.elasticsearch.index.query.QueryBuilders
 import org.elasticsearch.search.Scroll
 import org.elasticsearch.search.SearchHit
 import org.elasticsearch.search.builder.SearchSourceBuilder
 import org.elasticsearch.search.slice.SliceBuilder
-
-import java.util.concurrent.TimeUnit
 
 @Slf4j
 class ESClient {
@@ -146,18 +145,6 @@ class ESClient {
     //todo: error handling - do better
     def bulk(Map<BulkOps, List<Map>> records, int size, String index = config.index) {
 
-//        ActionListener<BulkResponse> listener = new ActionListener<BulkResponse>() {
-//            @Override
-//            public void onResponse(BulkResponse bulkResponse) {
-//                log.trace("successfully bulked [$bulkResponse.items.length]")
-//            }
-//
-//            @Override
-//            public void onFailure(Exception e) {
-//                log.error("nuts", e)
-//            }
-//        }
-
         def request = new BulkRequest().timeout(TimeValue.timeValueSeconds(5L)).setRefreshPolicy(WriteRequest.RefreshPolicy.WAIT_UNTIL)
 
         records[BulkOps.INSERT].each {
@@ -198,7 +185,46 @@ class ESClient {
             request.id(doc._id)
         }
         request.source(doc)
-        return client.index(request, RequestOptions.DEFAULT)
+        return client.index(request, RequestOptions.DEFAULT).id
+    }
+
+    def update(Map doc, String index = config.index) {
+        if (doc.containsKey("_id")) {
+            def request = new UpdateRequest(index, doc.remove("_id"))
+            request.doc(doc)
+            return client.update(request, RequestOptions.DEFAULT)
+        } else {
+            log.error("missing _id: can't update")
+            return null
+        }
+    }
+
+    def existsByMatch(String field, String value, String index = config.index) {
+        def request = new SearchRequest(index)
+        def search = new SearchSourceBuilder().size(1).fetchSource(false)
+        def match = new MatchQueryBuilder(field, value)
+        search.query(match)
+        request.source(search)
+        def response = client.search(request, RequestOptions.DEFAULT)
+        return response.hits.totalHits.value > 0
+    }
+
+    def getByMatch(String field, String value, String index = config.index) {
+        def request = new SearchRequest(index)
+        def search = new SearchSourceBuilder().size(1).fetchSource(false)
+        def match = new MatchQueryBuilder(field, value)
+        search.query(match)
+        request.source(search)
+        def response = client.search(request, RequestOptions.DEFAULT)
+
+        return response.hits.totalHits.value > 0 ? response : null
+    }
+
+    def rawRequest(String method, String endpoint, Map doc) {
+        def request = new Request(method, endpoint)
+        request.setJsonEntity(JsonOutput.toJson(doc))
+        def response = client.lowLevelClient.performRequest(request)
+        return new JsonSlurper().parse(response.entity.content)
     }
 }
 
