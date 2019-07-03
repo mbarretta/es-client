@@ -22,17 +22,18 @@ import org.elasticsearch.action.search.SearchScrollRequest
 import org.elasticsearch.action.support.IndicesOptions
 import org.elasticsearch.action.support.WriteRequest
 import org.elasticsearch.action.update.UpdateRequest
-import org.elasticsearch.client.Request
-import org.elasticsearch.client.RequestOptions
-import org.elasticsearch.client.RestClient
-import org.elasticsearch.client.RestClientBuilder
-import org.elasticsearch.client.RestHighLevelClient
+import org.elasticsearch.client.*
 import org.elasticsearch.common.unit.TimeValue
 import org.elasticsearch.index.query.MatchQueryBuilder
 import org.elasticsearch.index.query.QueryBuilder
 import org.elasticsearch.index.query.QueryBuilders
 import org.elasticsearch.search.Scroll
 import org.elasticsearch.search.SearchHit
+import org.elasticsearch.search.aggregations.AggregationBuilder
+import org.elasticsearch.search.aggregations.AggregationBuilders
+import org.elasticsearch.search.aggregations.bucket.composite.CompositeAggregation
+import org.elasticsearch.search.aggregations.bucket.composite.CompositeAggregationBuilder
+import org.elasticsearch.search.aggregations.bucket.composite.CompositeValuesSourceBuilder
 import org.elasticsearch.search.builder.SearchSourceBuilder
 import org.elasticsearch.search.slice.SliceBuilder
 
@@ -225,6 +226,31 @@ class ESClient {
         request.setJsonEntity(JsonOutput.toJson(doc))
         def response = client.lowLevelClient.performRequest(request)
         return new JsonSlurper().parse(response.entity.content)
+    }
+
+    def compositeAgg(List<CompositeValuesSourceBuilder> sources, QueryBuilder filter, int size = 10, String index = config.index){
+        CompositeAggregationBuilder compositeAggregationBuilder = AggregationBuilders.composite("composite", sources).size(size)
+
+        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder()
+        searchSourceBuilder.aggregation(compositeAggregationBuilder)
+        searchSourceBuilder.query(filter)
+        searchSourceBuilder.size(0)
+
+        SearchRequest searchRequest = new SearchRequest()
+        searchRequest.source(searchSourceBuilder)
+        searchRequest.indices(index)
+
+        def results = []
+        def afterKey = [:]
+        while (results.isEmpty() || afterKey != null) {
+            def searchResults = client.search(searchRequest, RequestOptions.DEFAULT)
+            def agg = searchResults.aggregations.get("composite")
+            results += agg.buckets
+            afterKey = agg.afterKey()
+
+            compositeAggregationBuilder = compositeAggregationBuilder.aggregateAfter(afterKey)
+        }
+        return results
     }
 }
 

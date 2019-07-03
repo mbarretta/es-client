@@ -1,6 +1,6 @@
 package com.elastic.barretta.clients
 
-import groovy.json.JsonOutput
+
 import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest
 import org.elasticsearch.action.admin.indices.flush.FlushRequest
 import org.elasticsearch.action.get.GetRequest
@@ -9,6 +9,8 @@ import org.elasticsearch.action.search.SearchRequest
 import org.elasticsearch.action.support.WriteRequest
 import org.elasticsearch.client.RequestOptions
 import org.elasticsearch.index.query.QueryBuilders
+import org.elasticsearch.index.query.TermQueryBuilder
+import org.elasticsearch.search.aggregations.bucket.composite.TermsValuesSourceBuilder
 import org.elasticsearch.search.builder.SearchSourceBuilder
 import spock.lang.Shared
 import spock.lang.Specification
@@ -136,5 +138,25 @@ class ESClientSpec extends Specification {
         then:
         response != null
         response.hits.total.value == 1
+    }
+
+    def "compositeAggs works"() {
+        setup:
+        def data = [[comptest: 20, comptestterm: "skipme"]]
+        20.times  {
+            data <<  [comptest: it, comptestterm: "term"]
+        }
+        esClient.bulk([(ESClient.BulkOps.INSERT): data])
+        esClient.indices().flush(new FlushRequest(properties.esclient.index), RequestOptions.DEFAULT)
+        def sources = [
+            new TermsValuesSourceBuilder("terms").field("comptest")
+        ]
+        def query = QueryBuilders.constantScoreQuery(new TermQueryBuilder("comptestterm.keyword", "term"))
+
+        when:
+        def buckets = esClient.compositeAgg(sources, query)
+
+        then:
+        buckets.size() == 20
     }
 }
