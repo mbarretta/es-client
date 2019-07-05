@@ -10,6 +10,7 @@ import org.elasticsearch.action.support.WriteRequest
 import org.elasticsearch.client.RequestOptions
 import org.elasticsearch.index.query.QueryBuilders
 import org.elasticsearch.index.query.TermQueryBuilder
+import org.elasticsearch.search.aggregations.AggregationBuilders
 import org.elasticsearch.search.aggregations.bucket.composite.TermsValuesSourceBuilder
 import org.elasticsearch.search.builder.SearchSourceBuilder
 import spock.lang.Shared
@@ -152,9 +153,10 @@ class ESClientSpec extends Specification {
             new TermsValuesSourceBuilder("terms").field("comptest")
         ]
         def query = QueryBuilders.constantScoreQuery(new TermQueryBuilder("comptestterm.keyword", "term"))
+        def compositeAgg = AggregationBuilders.composite("composite", sources).size(5)
 
         when:
-        def buckets = esClient.compositeAgg(sources, query)
+        def buckets = esClient.compositeAgg(compositeAgg, query)
 
         then:
         buckets.size() == 20

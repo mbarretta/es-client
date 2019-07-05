@@ -228,9 +228,7 @@ class ESClient {
         return new JsonSlurper().parse(response.entity.content)
     }
 
-    def compositeAgg(List<CompositeValuesSourceBuilder> sources, QueryBuilder filter, int size = 10, String index = config.index){
-        CompositeAggregationBuilder compositeAggregationBuilder = AggregationBuilders.composite("composite", sources).size(size)
-
+    def compositeAgg(CompositeAggregationBuilder compositeAggregationBuilder, QueryBuilder filter, String index = config.index){
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder()
         searchSourceBuilder.aggregation(compositeAggregationBuilder)
         searchSourceBuilder.query(filter)
