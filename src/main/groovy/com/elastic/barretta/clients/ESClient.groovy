@@ -12,7 +12,6 @@ import org.apache.http.impl.client.BasicCredentialsProvider
 import org.apache.http.impl.nio.client.HttpAsyncClientBuilder
 import org.elasticsearch.action.DocWriteRequest
 import org.elasticsearch.action.admin.indices.alias.get.GetAliasesRequest
-import org.elasticsearch.action.admin.indices.get.GetIndexRequest
 import org.elasticsearch.action.bulk.BulkRequest
 import org.elasticsearch.action.delete.DeleteRequest
 import org.elasticsearch.action.index.IndexRequest
@@ -23,17 +22,14 @@ import org.elasticsearch.action.support.IndicesOptions
 import org.elasticsearch.action.support.WriteRequest
 import org.elasticsearch.action.update.UpdateRequest
 import org.elasticsearch.client.*
+import org.elasticsearch.client.indices.GetIndexRequest
 import org.elasticsearch.common.unit.TimeValue
 import org.elasticsearch.index.query.MatchQueryBuilder
 import org.elasticsearch.index.query.QueryBuilder
 import org.elasticsearch.index.query.QueryBuilders
 import org.elasticsearch.search.Scroll
 import org.elasticsearch.search.SearchHit
-import org.elasticsearch.search.aggregations.AggregationBuilder
-import org.elasticsearch.search.aggregations.AggregationBuilders
-import org.elasticsearch.search.aggregations.bucket.composite.CompositeAggregation
 import org.elasticsearch.search.aggregations.bucket.composite.CompositeAggregationBuilder
-import org.elasticsearch.search.aggregations.bucket.composite.CompositeValuesSourceBuilder
 import org.elasticsearch.search.builder.SearchSourceBuilder
 import org.elasticsearch.search.slice.SliceBuilder
 
@@ -131,7 +127,7 @@ class ESClient {
     }
 
     def getIndex(String indexName) {
-        GetIndexRequest request = new GetIndexRequest().indices(indexName)
+        GetIndexRequest request = new GetIndexRequest(indexName)
         return client.indices().get(request, RequestOptions.DEFAULT)
     }
 
@@ -173,7 +169,13 @@ class ESClient {
         }
 
 //        client.bulkAsync(request, RequestOptions.DEFAULT, listener)
-        client.bulk(request, RequestOptions.DEFAULT)
+        def response = client.bulk(request, RequestOptions.DEFAULT)
+        if (response.hasFailures()) {
+            response.collect { it.failed }.each {
+                log.error("BULK ERROR: ${it.failureMessage}")
+            }
+            throw new RuntimeException()
+        }
     }
 
     def termQuery(String field, value, String index = config.index) {
