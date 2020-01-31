@@ -144,37 +144,49 @@ class ESClient {
 
         def request = new BulkRequest().timeout(TimeValue.timeValueSeconds(5L)).setRefreshPolicy(WriteRequest.RefreshPolicy.WAIT_UNTIL)
 
-        records[BulkOps.INSERT].each {
-            if (it._id) {
-                def id = it.remove("_id")
-                request.add(new IndexRequest(index).id(id).source(it))
-            } else {
-                request.add(new IndexRequest(index).source(it))
+        try {
+            records[BulkOps.INSERT].each {
+                if (it) {
+                    if (it._id) {
+                        def id = it.remove("_id") as String
+                        request.add(new IndexRequest(index).id(id).source(it))
+                    } else {
+                        request.add(new IndexRequest(index).source(it))
+                    }
+                }
             }
-        }
-        records[BulkOps.CREATE].each {
-            if (it._id) {
-                def id = it.remove("_id")
-                request.add(new IndexRequest(index).id(id).opType(DocWriteRequest.OpType.CREATE).source(it))
-            } else {
-                request.add(new IndexRequest(index).opType(DocWriteRequest.OpType.CREATE).source(it))
+            records[BulkOps.CREATE].each {
+                if (it) {
+                    if (it._id) {
+                        def id = it.remove("_id") as String
+                        request.add(new IndexRequest(index).id(id).opType(DocWriteRequest.OpType.CREATE).source(it))
+                    } else {
+                        request.add(new IndexRequest(index).opType(DocWriteRequest.OpType.CREATE).source(it))
+                    }
+                }
             }
-        }
-        records[BulkOps.UPDATE].each {
-            def id = it.remove("_id")
-            request.add(new UpdateRequest(index, id).doc(it))
-        }
-        records[BulkOps.DELETE].each {
-            request.add(new DeleteRequest(index, it._id))
-        }
+            records[BulkOps.UPDATE].each {
+                if (it) {
+                    def id = it.remove("_id") as String
+                    request.add(new UpdateRequest(index, id).doc(it))
+                }
+            }
+            records[BulkOps.DELETE].each {
+                if (it) {
+                    request.add(new DeleteRequest(index, it._id as String))
+                }
+            }
 
 //        client.bulkAsync(request, RequestOptions.DEFAULT, listener)
-        def response = client.bulk(request, RequestOptions.DEFAULT)
-        if (response.hasFailures()) {
-            response.collect { it.failed }.each {
-                log.error("BULK ERROR: ${it.failureMessage}")
+            def response = client.bulk(request, RequestOptions.DEFAULT)
+            if (response.hasFailures()) {
+                response.findAll { it.failed }.each {
+                    log.error("BULK ERROR: ${it.failureMessage}")
+                }
+                throw new RuntimeException()
             }
-            throw new RuntimeException()
+        } catch (e) {
+            log.error("uh oh", e)
         }
     }
 
@@ -185,7 +197,7 @@ class ESClient {
     def index(Map doc, String index = config.index) {
         def request = new IndexRequest(index, "_doc")
         if (doc._id) {
-            request.id(doc._id)
+            request.id(doc._id as String)
         }
         request.source(doc)
         return client.index(request, RequestOptions.DEFAULT).id
@@ -193,7 +205,7 @@ class ESClient {
 
     def update(Map doc, String index = config.index) {
         if (doc.containsKey("_id")) {
-            def request = new UpdateRequest(index, doc.remove("_id"))
+            def request = new UpdateRequest(index, doc.remove("_id") as String)
             request.doc(doc)
             return client.update(request, RequestOptions.DEFAULT)
         } else {
@@ -230,7 +242,7 @@ class ESClient {
         return new JsonSlurper().parse(response.entity.content)
     }
 
-    def compositeAgg(CompositeAggregationBuilder compositeAggregationBuilder, QueryBuilder filter, String index = config.index){
+    def compositeAgg(CompositeAggregationBuilder compositeAggregationBuilder, QueryBuilder filter, String index = config.index) {
         SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder()
         searchSourceBuilder.aggregation(compositeAggregationBuilder)
         searchSourceBuilder.query(filter)

@@ -1,9 +1,10 @@
 plugins {
     id 'groovy'
+    id 'maven'
 }
 
 group 'com.elastic.barretta'
-version '1.0-SNAPSHOT'
+version '1.0'
 
 repositories {
     mavenCentral()
@@ -13,7 +14,7 @@ repositories {
 dependencies {
     compile(
         'org.codehaus.groovy:groovy-all:2.5.5',
-        'org.elasticsearch.client:elasticsearch-rest-high-level-client:7.2.0',
+        'org.elasticsearch.client:elasticsearch-rest-high-level-client:7.5.0',
         'ch.qos.logback:logback-classic:1.2.3',
         'org.codehaus.gpars:gpars:1.2.1'
     )
@@ -26,4 +27,7 @@ task sourcesJar(type: Jar) {
 }
 tasks.withType(GroovyCompile) {
     groovyOptions.optimizationOptions.indy = true
+}
+artifacts {
+    archives sourcesJar
 }
