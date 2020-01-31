@@ -3,7 +3,7 @@ plugins {
     id 'maven'
 }
 
-group 'com.elastic.barretta'
+group 'com.barretta.elastic'
 version '1.0'
 
 repositories {

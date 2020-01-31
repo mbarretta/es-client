@@ -1,4 +1,4 @@
-package com.elastic.barretta.clients
+package com.barretta.elastic.clients
 
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper

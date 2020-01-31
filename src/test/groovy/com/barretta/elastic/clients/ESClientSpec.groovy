@@ -1,4 +1,4 @@
-package com.elastic.barretta.clients
+package com.barretta.elastic.clients
 
 
 import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest
