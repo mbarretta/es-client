@@ -10,9 +10,12 @@ import org.apache.http.auth.UsernamePasswordCredentials
 import org.apache.http.client.CredentialsProvider
 import org.apache.http.impl.client.BasicCredentialsProvider
 import org.apache.http.impl.nio.client.HttpAsyncClientBuilder
+import org.elasticsearch.action.ActionListener
 import org.elasticsearch.action.DocWriteRequest
 import org.elasticsearch.action.admin.indices.alias.get.GetAliasesRequest
+import org.elasticsearch.action.bulk.BulkItemResponse
 import org.elasticsearch.action.bulk.BulkRequest
+import org.elasticsearch.action.bulk.BulkResponse
 import org.elasticsearch.action.delete.DeleteRequest
 import org.elasticsearch.action.index.IndexRequest
 import org.elasticsearch.action.search.ClearScrollRequest
@@ -177,14 +180,22 @@ class ESClient {
                 }
             }
 
-//        client.bulkAsync(request, RequestOptions.DEFAULT, listener)
-            def response = client.bulk(request, RequestOptions.DEFAULT)
-            if (response.hasFailures()) {
-                response.findAll { it.failed }.each {
-                    log.error("BULK ERROR: ${it.failureMessage}")
+            client.bulkAsync(request, RequestOptions.DEFAULT, new ActionListener<BulkResponse>() {
+                @Override
+                void onResponse(BulkResponse bulkItemResponses) {
+                    if (bulkItemResponses.hasFailures()) {
+                        bulkItemResponses.findAll { it.failed }.each { BulkItemResponse response ->
+                            log.error("bulk error: ${response.failureMessage}")
+                        }
+                    }
                 }
-                throw new RuntimeException()
-            }
+
+                @Override
+                void onFailure(Exception e) {
+                    log.error("BULK ERROR: [$e.message] [$e.cause]", e)
+                }
+            })
+
         } catch (e) {
             log.error("uh oh", e)
         }
