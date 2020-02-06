@@ -13,9 +13,11 @@ repositories {
 
 dependencies {
     compile(
-        'org.codehaus.groovy:groovy-all:2.5.5',
+        'org.codehaus.groovy:groovy-all:2.5.7',
         'org.elasticsearch.client:elasticsearch-rest-high-level-client:7.5.0',
         'ch.qos.logback:logback-classic:1.2.3',
+        'org.apache.logging.log4j:log4j-to-slf4j:2.11.2',
+        'co.elastic.logging:logback-ecs-encoder:0.1.3',
         'org.codehaus.gpars:gpars:1.2.1'
     )
     testCompile 'com.github.spockframework.spock:spock-core:4bcef77'

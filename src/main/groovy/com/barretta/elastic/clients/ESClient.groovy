@@ -170,12 +170,14 @@ class ESClient {
             }
             records[BulkOps.UPDATE].each {
                 if (it) {
+                    index = it._index ? it.remove("_index") as String : index
                     def id = it.remove("_id") as String
                     request.add(new UpdateRequest(index, id).doc(it))
                 }
             }
             records[BulkOps.DELETE].each {
                 if (it) {
+                    index = it._index ? it.remove("_index") as String : index
                     request.add(new DeleteRequest(index, it._id as String))
                 }
             }

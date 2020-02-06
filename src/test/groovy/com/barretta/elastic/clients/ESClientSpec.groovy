@@ -8,6 +8,7 @@ import org.elasticsearch.action.index.IndexRequest
 import org.elasticsearch.action.search.SearchRequest
 import org.elasticsearch.action.support.WriteRequest
 import org.elasticsearch.client.RequestOptions
+import org.elasticsearch.index.query.MatchAllQueryBuilder
 import org.elasticsearch.index.query.QueryBuilders
 import org.elasticsearch.index.query.TermQueryBuilder
 import org.elasticsearch.search.aggregations.AggregationBuilders
@@ -71,15 +72,15 @@ class ESClientSpec extends Specification {
 
     def "bulk Insert works"() {
         setup:
-        def data = [(ESClient.BulkOps.INSERT): [
-            [bulkTest: "a"],
-            [bulkTest: "b"]
+        def data = [
+            (ESClient.BulkOps.INSERT): [
+                [bulkTest: "a"],
+                [bulkTest: "b"]
+            ]
         ]
-        ]
-        def search = new SearchRequest(indices: [properties.esclient.index])
-        def source = new SearchSourceBuilder()
-        source.query(QueryBuilders.termsQuery("bulkTest.keyword", "a", "b"))
-        search.source(source)
+        def search = new SearchRequest(indices: [properties.esclient.index]).source(
+            new SearchSourceBuilder().query(QueryBuilders.termsQuery("bulkTest.keyword", "a", "b"))
+        )
 
         when:
         esClient.bulk(data)
@@ -91,15 +92,14 @@ class ESClientSpec extends Specification {
 
     def "bulk insert works when source docs contain an _id"() {
         setup:
-        def data = [(ESClient.BulkOps.INSERT): [
-            [bulkTest: "c", "_id":"1"],
-            [bulkTest: "d", "_id":"2"]
-        ]
+        def data = [
+            (ESClient.BulkOps.INSERT): [
+                [bulkTest: "c", "_id": "1"],
+                [bulkTest: "d", "_id": "2"]
+            ]
         ]
         def search = new SearchRequest(indices: [properties.esclient.index])
-        def source = new SearchSourceBuilder()
-        source.query(QueryBuilders.termsQuery("bulkTest.keyword", "c", "d"))
-        search.source(source)
+            .source(new SearchSourceBuilder().query(QueryBuilders.termsQuery("bulkTest.keyword", "c", "d")))
 
         when:
         esClient.bulk(data)
@@ -108,6 +108,33 @@ class ESClientSpec extends Specification {
         then:
         esClient.search(search, RequestOptions.DEFAULT).hits.totalHits.value == 2
         esClient.get(new GetRequest(properties.esclient.index, "1"), RequestOptions.DEFAULT).isExists()
+    }
+
+    def "bulk update works when source docs contain an _index"() {
+        setup:
+        def data = [
+            [bulkTest: "a", "_id": 1],
+            [bulkTest: "b", "_id": 2]
+        ]
+        esClient.bulkInsert(data, "index-test-index")
+
+
+        when:
+        data = [
+            [bulkTest: "c", "_id": 1, "_index": "index-test-index"],
+            [bulkTest: "d", "_id": 2, "_index": "index-test-index"]
+        ]
+        esClient.bulk([(ESClient.BulkOps.UPDATE): data], properties.esClient.index as String)
+
+        then:
+        def search = new SearchRequest(indices: ["index-test-index"])
+            .source(new SearchSourceBuilder().query(new MatchAllQueryBuilder()))
+
+        esClient.search(search, RequestOptions.DEFAULT).hits.totalHits.value == 2
+        esClient.get(new GetRequest("index-test-index", "1"), RequestOptions.DEFAULT).source.bulkTest == "c"
+
+        cleanup:
+        esClient.indices().delete(new DeleteIndexRequest("index-test-index"), RequestOptions.DEFAULT)
     }
 
     def "term query works"() {
@@ -144,8 +171,8 @@ class ESClientSpec extends Specification {
     def "compositeAggs works"() {
         setup:
         def data = [[comptest: 20, comptestterm: "skipme"]]
-        20.times  {
-            data <<  [comptest: it, comptestterm: "term"]
+        20.times {
+            data << [comptest: it, comptestterm: "term"]
         }
         esClient.bulk([(ESClient.BulkOps.INSERT): data])
         esClient.indices().flush(new FlushRequest(properties.esclient.index), RequestOptions.DEFAULT)
