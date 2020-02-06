@@ -87,12 +87,16 @@ class ESClient {
     }
 
     def scrollQuery(QueryBuilder query, int batchSize, int slices, int minutes, Closure mapFunction) {
+        scrollQuery(query, batchSize, slices, minutes, config.index, mapFunction)
+    }
+
+    def scrollQuery(QueryBuilder query, int batchSize, int slices, int minutes, String index, Closure mapFunction) {
         final Scroll scroll = new Scroll(TimeValue.timeValueMinutes(minutes as long))
 
         def sliceHandler = { slice ->
             def sliceBuilder = new SliceBuilder(slice, slices)
             def searchSourceBuilder = new SearchSourceBuilder().size(batchSize).slice(sliceBuilder).query(query)
-            def searchRequest = new SearchRequest(config.index).scroll(scroll).source(searchSourceBuilder)
+            def searchRequest = new SearchRequest(index).scroll(scroll).source(searchSourceBuilder)
             def searchResponse = client.search(searchRequest, RequestOptions.DEFAULT)
 
             String scrollId = searchResponse.scrollId
