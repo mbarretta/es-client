@@ -1,6 +1,5 @@
 package com.barretta.elastic.clients
 
-
 import org.elasticsearch.action.admin.indices.delete.DeleteIndexRequest
 import org.elasticsearch.action.admin.indices.flush.FlushRequest
 import org.elasticsearch.action.get.GetRequest
@@ -84,6 +83,7 @@ class ESClientSpec extends Specification {
 
         when:
         esClient.bulk(data)
+        Thread.sleep(1000)
         esClient.indices().flush(new FlushRequest(properties.esclient.index), RequestOptions.DEFAULT)
 
         then:
@@ -103,6 +103,7 @@ class ESClientSpec extends Specification {
 
         when:
         esClient.bulk(data)
+        Thread.sleep(1000)
         esClient.indices().flush(new FlushRequest(properties.esclient.index), RequestOptions.DEFAULT)
 
         then:
@@ -117,7 +118,8 @@ class ESClientSpec extends Specification {
             [bulkTest: "b", "_id": 2]
         ]
         esClient.bulkInsert(data, "index-test-index")
-
+        Thread.sleep(1000)
+        esClient.indices().flush(new FlushRequest("index-test-index"), RequestOptions.DEFAULT)
 
         when:
         data = [
@@ -125,6 +127,8 @@ class ESClientSpec extends Specification {
             [bulkTest: "d", "_id": 2, "_index": "index-test-index"]
         ]
         esClient.bulk([(ESClient.BulkOps.UPDATE): data], properties.esClient.index as String)
+        Thread.sleep(1000)
+        esClient.indices().flush(new FlushRequest("index-test-index"), RequestOptions.DEFAULT)
 
         then:
         def search = new SearchRequest(indices: ["index-test-index"])
@@ -175,6 +179,7 @@ class ESClientSpec extends Specification {
             data << [comptest: it, comptestterm: "term"]
         }
         esClient.bulk([(ESClient.BulkOps.INSERT): data])
+        Thread.sleep(1000)
         esClient.indices().flush(new FlushRequest(properties.esclient.index), RequestOptions.DEFAULT)
         def sources = [
             new TermsValuesSourceBuilder("terms").field("comptest")
