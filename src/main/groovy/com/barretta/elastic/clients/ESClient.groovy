@@ -50,11 +50,17 @@ class ESClient {
         String user
         String pass
         String index
+
+        @Override
+        public String toString() {
+            return "Config{ url='$url', user='$user', pass='$pass', index='$index' }"
+        }
     }
 
     ESClient(Config config) {
         this.config = config
         init()
+        log.debug("ES connection test succeed? [${test()}]")
     }
 
     def test() {
