@@ -194,6 +194,7 @@ class ESClient {
             client.bulkAsync(request, RequestOptions.DEFAULT, new ActionListener<BulkResponse>() {
                 @Override
                 void onResponse(BulkResponse bulkItemResponses) {
+                    log.info("bulk load complete")
                     if (bulkItemResponses.hasFailures()) {
                         bulkItemResponses.findAll { it.failed }.each { BulkItemResponse response ->
                             log.error("bulk error: ${response.failureMessage}")
