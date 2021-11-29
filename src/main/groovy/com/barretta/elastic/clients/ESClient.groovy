@@ -155,6 +155,7 @@ class ESClient {
     def bulk(Map<BulkOps, List<Map>> records, int size, String index = config.index) {
 
         def request = new BulkRequest().timeout(TimeValue.timeValueSeconds(5L)).setRefreshPolicy(WriteRequest.RefreshPolicy.WAIT_UNTIL)
+        Cancellable bulkTask
 
         try {
             records[BulkOps.INSERT].each {
@@ -191,7 +192,7 @@ class ESClient {
                 }
             }
 
-            client.bulkAsync(request, RequestOptions.DEFAULT, new ActionListener<BulkResponse>() {
+            bulkTask = client.bulkAsync(request, RequestOptions.DEFAULT, new ActionListener<BulkResponse>() {
                 @Override
                 void onResponse(BulkResponse bulkItemResponses) {
                     log.info("bulk load complete")
@@ -211,6 +212,7 @@ class ESClient {
         } catch (e) {
             log.error("uh oh", e)
         }
+        return bulkTask
     }
 
     def termQuery(String field, value, String index = config.index) {
