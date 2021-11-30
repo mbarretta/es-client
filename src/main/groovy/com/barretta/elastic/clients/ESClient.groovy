@@ -160,6 +160,7 @@ class ESClient {
         try {
             records[BulkOps.INSERT].each {
                 if (it) {
+                    index = it._index ? it.remove("_index") as String : index
                     if (it._id) {
                         def id = it.remove("_id") as String
                         request.add(new IndexRequest(index).id(id).source(it))
@@ -170,6 +171,7 @@ class ESClient {
             }
             records[BulkOps.CREATE].each {
                 if (it) {
+                    index = it._index ? it.remove("_index") as String : index
                     if (it._id) {
                         def id = it.remove("_id") as String
                         request.add(new IndexRequest(index).id(id).opType(DocWriteRequest.OpType.CREATE).source(it))
