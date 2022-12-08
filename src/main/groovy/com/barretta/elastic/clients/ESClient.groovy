@@ -1,5 +1,9 @@
 package com.barretta.elastic.clients
 
+import co.elastic.clients.elasticsearch.ElasticsearchClient
+import co.elastic.clients.elasticsearch.core.BulkRequest
+import co.elastic.clients.json.jackson.JacksonJsonpMapper
+import co.elastic.clients.transport.rest_client.RestClientTransport
 import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 import groovy.util.logging.Slf4j
@@ -10,19 +14,12 @@ import org.apache.http.auth.UsernamePasswordCredentials
 import org.apache.http.client.CredentialsProvider
 import org.apache.http.impl.client.BasicCredentialsProvider
 import org.apache.http.impl.nio.client.HttpAsyncClientBuilder
-import org.elasticsearch.action.ActionListener
-import org.elasticsearch.action.DocWriteRequest
 import org.elasticsearch.action.admin.indices.alias.get.GetAliasesRequest
-import org.elasticsearch.action.bulk.BulkItemResponse
-import org.elasticsearch.action.bulk.BulkRequest
-import org.elasticsearch.action.bulk.BulkResponse
-import org.elasticsearch.action.delete.DeleteRequest
 import org.elasticsearch.action.index.IndexRequest
 import org.elasticsearch.action.search.ClearScrollRequest
 import org.elasticsearch.action.search.SearchRequest
 import org.elasticsearch.action.search.SearchScrollRequest
 import org.elasticsearch.action.support.IndicesOptions
-import org.elasticsearch.action.support.WriteRequest
 import org.elasticsearch.action.update.UpdateRequest
 import org.elasticsearch.client.*
 import org.elasticsearch.client.indices.GetIndexRequest
@@ -39,7 +36,8 @@ import org.elasticsearch.search.slice.SliceBuilder
 @Slf4j
 class ESClient {
     @Delegate
-    RestHighLevelClient client
+    ElasticsearchClient client
+    RestHighLevelClient deprecatedClient
     Config config
     static enum BulkOps {
         INSERT, CREATE, UPDATE, DELETE
@@ -64,7 +62,7 @@ class ESClient {
     }
 
     def test() {
-        return client.ping(RequestOptions.DEFAULT)
+        return client.ping() && deprecatedClient.ping(RequestOptions.DEFAULT)
     }
 
     private init() {
@@ -84,8 +82,10 @@ class ESClient {
                 }
             )
         }
+        def rct = builder.build()
 
-        client = new RestHighLevelClient(builder)
+        client = new ElasticsearchClient(new RestClientTransport(rct, new JacksonJsonpMapper()))
+        deprecatedClient = new RestHighLevelClientBuilder(rct).setApiCompatibilityMode(true).build()
     }
 
     def scrollQuery(QueryBuilder query, int batchSize, Closure mapFunction) {
@@ -103,7 +103,7 @@ class ESClient {
             def sliceBuilder = new SliceBuilder(slice, slices)
             def searchSourceBuilder = new SearchSourceBuilder().size(batchSize).slice(sliceBuilder).query(query)
             def searchRequest = new SearchRequest(index).scroll(scroll).source(searchSourceBuilder)
-            def searchResponse = client.search(searchRequest, RequestOptions.DEFAULT)
+            def searchResponse = deprecatedClient.search(searchRequest, RequestOptions.DEFAULT)
 
             String scrollId = searchResponse.scrollId
             SearchHit[] searchHits = searchResponse.hits.hits
@@ -115,14 +115,14 @@ class ESClient {
                     mapFunction(it)
                 }
                 SearchScrollRequest scrollRequest = new SearchScrollRequest(scrollId).scroll(scroll)
-                searchResponse = client.scroll(scrollRequest, RequestOptions.DEFAULT)
+                searchResponse = deprecatedClient.scroll(scrollRequest, RequestOptions.DEFAULT)
                 scrollId = searchResponse.scrollId
                 searchHits = searchResponse.hits.hits
             }
             log.trace("...done with slice [$slice]")
             ClearScrollRequest clearScrollRequest = new ClearScrollRequest()
             clearScrollRequest.addScrollId(scrollId)
-            client.clearScroll(clearScrollRequest, RequestOptions.DEFAULT)
+            deprecatedClient.clearScroll(clearScrollRequest, RequestOptions.DEFAULT)
         }
 
         GParsPool.withPool {
@@ -135,12 +135,12 @@ class ESClient {
     def getIndicesFromPattern(String indexPattern) {
         def request = new GetAliasesRequest().indices(indexPattern)
         request.indicesOptions(IndicesOptions.STRICT_EXPAND_OPEN)
-        return client.indices().getAlias(request, RequestOptions.DEFAULT)
+        return deprecatedClient.indices().getAlias(request, RequestOptions.DEFAULT)
     }
 
     def getIndex(String indexName) {
         GetIndexRequest request = new GetIndexRequest(indexName)
-        return client.indices().get(request, RequestOptions.DEFAULT)
+        return deprecatedClient.indices().get(request, RequestOptions.DEFAULT)
     }
 
     def bulkInsert(List<Map> records, String index = config.index) {
@@ -148,14 +148,12 @@ class ESClient {
     }
 
     def bulk(Map<BulkOps, List<Map>> records, String index = config.index) {
-        bulk(records, 500, index)
+        return bulk(records, 500, index)
     }
 
     //todo: error handling - do better
     def bulk(Map<BulkOps, List<Map>> records, int size, String index = config.index) {
-
-        def request = new BulkRequest().timeout(TimeValue.timeValueSeconds(5L)).setRefreshPolicy(WriteRequest.RefreshPolicy.WAIT_UNTIL)
-        Cancellable bulkTask
+        def builder = new BulkRequest.Builder()
 
         try {
             records[BulkOps.INSERT].each {
@@ -163,9 +161,22 @@ class ESClient {
                     index = it._index ? it.remove("_index") as String : index
                     if (it._id) {
                         def id = it.remove("_id") as String
-                        request.add(new IndexRequest(index).id(id).source(it))
+                        builder.operations(op -> op
+                            .index(idx -> idx
+                                .index(index)
+                                .id(id)
+                                .document(it)
+                            )
+                        )
+//                        request.add(new IndexRequest(index).id(id).source(it))
                     } else {
-                        request.add(new IndexRequest(index).source(it))
+                        builder.operations(op -> op
+                            .index(idx -> idx
+                                .index(index)
+                                .document(it)
+                            )
+                        )
+//                        request.add(new IndexRequest(index).source(it))
                     }
                 }
             }
@@ -174,9 +185,22 @@ class ESClient {
                     index = it._index ? it.remove("_index") as String : index
                     if (it._id) {
                         def id = it.remove("_id") as String
-                        request.add(new IndexRequest(index).id(id).opType(DocWriteRequest.OpType.CREATE).source(it))
+                        builder.operations(op -> op
+                            .create(c -> c
+                                .index(index)
+                                .id(id)
+                                .document(it)
+                            )
+                        )
+//                        request.add(new IndexRequest(index).id(id).opType(DocWriteRequest.OpType.CREATE).source(it))
                     } else {
-                        request.add(new IndexRequest(index).opType(DocWriteRequest.OpType.CREATE).source(it))
+                        builder.operations(op -> op
+                            .create(c -> c
+                                .index(index)
+                                .document(it)
+                            )
+                        )
+//                        request.add(new IndexRequest(index).opType(DocWriteRequest.OpType.CREATE).source(it))
                     }
                 }
             }
@@ -184,41 +208,49 @@ class ESClient {
                 if (it) {
                     index = it._index ? it.remove("_index") as String : index
                     def id = it.remove("_id") as String
-                    request.add(new UpdateRequest(index, id).doc(it))
+                    builder.operations(op -> op
+                        .update(u -> u
+                            .index(index)
+                            .id(id)
+                            .action(a -> a
+                                .docAsUpsert(true)
+                                .doc(it)
+                            )
+                        )
+                    )
+//                    request.add(new UpdateRequest(index, id).doc(it))
                 }
             }
             records[BulkOps.DELETE].each {
                 if (it) {
                     index = it._index ? it.remove("_index") as String : index
-                    request.add(new DeleteRequest(index, it._id as String))
+//                    request.add(new DeleteRequest(index, it._id as String))
+                    builder.operations(op -> op
+                        .delete(d -> d
+                            .index(index)
+                            .id(it._id as String)
+                        )
+                    )
                 }
             }
 
-            bulkTask = client.bulkAsync(request, RequestOptions.DEFAULT, new ActionListener<BulkResponse>() {
-                @Override
-                void onResponse(BulkResponse bulkItemResponses) {
-                    log.info("bulk load complete")
-                    if (bulkItemResponses.hasFailures()) {
-                        bulkItemResponses.findAll { it.failed }.each { BulkItemResponse response ->
-                            log.error("bulk error: ${response.failureMessage}")
-                        }
+            def response = client.bulk(builder.build())
+            if (response.errors()) {
+                log.error("bulk errors!")
+                for (def item : response.items()) {
+                    if (item.error() != null) {
+                        log.error(item.error().reason())
                     }
                 }
-
-                @Override
-                void onFailure(Exception e) {
-                    log.error("BULK ERROR: [$e.message] [$e.cause]", e)
-                }
-            })
+            }
 
         } catch (e) {
             log.error("uh oh", e)
         }
-        return bulkTask
     }
 
     def termQuery(String field, value, String index = config.index) {
-        return client.search(new SearchRequest(index).source(new SearchSourceBuilder().query(QueryBuilders.termQuery(field, value))), RequestOptions.DEFAULT)
+        return deprecatedClient.search(new SearchRequest(index).source(new SearchSourceBuilder().query(QueryBuilders.termQuery(field, value))), RequestOptions.DEFAULT)
     }
 
     def index(Map doc, String index = config.index) {
@@ -227,14 +259,14 @@ class ESClient {
             request.id(doc._id as String)
         }
         request.source(doc)
-        return client.index(request, RequestOptions.DEFAULT).id
+        return deprecatedClient.index(request, RequestOptions.DEFAULT).id
     }
 
     def update(Map doc, String index = config.index) {
         if (doc.containsKey("_id")) {
             def request = new UpdateRequest(index, doc.remove("_id") as String)
             request.doc(doc)
-            return client.update(request, RequestOptions.DEFAULT)
+            return deprecatedClient.update(request, RequestOptions.DEFAULT)
         } else {
             log.error("missing _id: can't update")
             return null
@@ -247,7 +279,7 @@ class ESClient {
         def match = new MatchQueryBuilder(field, value)
         search.query(match)
         request.source(search)
-        def response = client.search(request, RequestOptions.DEFAULT)
+        def response = deprecatedClient.search(request, RequestOptions.DEFAULT)
         return response.hits.totalHits.value > 0
     }
 
@@ -257,7 +289,7 @@ class ESClient {
         def match = new MatchQueryBuilder(field, value)
         search.query(match)
         request.source(search)
-        def response = client.search(request, RequestOptions.DEFAULT)
+        def response = deprecatedClient.search(request, RequestOptions.DEFAULT)
 
         return response.hits.totalHits.value > 0 ? response : null
     }
@@ -265,7 +297,7 @@ class ESClient {
     def rawRequest(String method, String endpoint, Map doc) {
         def request = new Request(method, endpoint)
         request.setJsonEntity(JsonOutput.toJson(doc))
-        def response = client.lowLevelClient.performRequest(request)
+        def response = deprecatedClient.lowLevelClient.performRequest(request)
         return new JsonSlurper().parse(response.entity.content)
     }
 
@@ -282,7 +314,7 @@ class ESClient {
         def results = []
         def afterKey = [:]
         while (results.isEmpty() || afterKey != null) {
-            def searchResults = client.search(searchRequest, RequestOptions.DEFAULT)
+            def searchResults = deprecatedClient.search(searchRequest, RequestOptions.DEFAULT)
             def agg = searchResults.aggregations.get("composite")
             results += agg.buckets
             afterKey = agg.afterKey()

@@ -32,11 +32,12 @@ class ESClientSpec extends Specification {
         esClient = new ESClient(
             new ESClient.Config(user: properties.esclient.user, pass: properties.esclient.pass, url: properties.esclient.url, index: properties.esclient.index)
         )
-        esClient.index(indexRequest, RequestOptions.DEFAULT).forcedRefresh()
+        esClient.deprecatedClient.index(indexRequest, RequestOptions.DEFAULT)
+        esClient.indices().refresh()
     }
 
     def cleanupSpec() {
-        esClient.indices().delete(new DeleteIndexRequest(properties.esclient.index), RequestOptions.DEFAULT)
+        esClient.deprecatedClient.indices().delete(new DeleteIndexRequest(properties.esclient.index), RequestOptions.DEFAULT)
     }
 
     def "ScrollQuery will run mapFunction"() {
@@ -84,10 +85,10 @@ class ESClientSpec extends Specification {
         when:
         esClient.bulk(data)
         Thread.sleep(1000)
-        esClient.indices().flush(new FlushRequest(properties.esclient.index), RequestOptions.DEFAULT)
+        esClient.deprecatedClient.indices().flush(new FlushRequest(properties.esclient.index), RequestOptions.DEFAULT)
 
         then:
-        esClient.search(search, RequestOptions.DEFAULT).hits.totalHits.value == 2
+        esClient.deprecatedClient.search(search, RequestOptions.DEFAULT).hits.totalHits.value == 2
     }
 
     def "bulk insert works when source docs contain an _id"() {
@@ -104,11 +105,11 @@ class ESClientSpec extends Specification {
         when:
         esClient.bulk(data)
         Thread.sleep(1000)
-        esClient.indices().flush(new FlushRequest(properties.esclient.index), RequestOptions.DEFAULT)
+        esClient.deprecatedClient.indices().flush(new FlushRequest(properties.esclient.index), RequestOptions.DEFAULT)
 
         then:
-        esClient.search(search, RequestOptions.DEFAULT).hits.totalHits.value == 2
-        esClient.get(new GetRequest(properties.esclient.index, "1"), RequestOptions.DEFAULT).isExists()
+        esClient.deprecatedClient.search(search, RequestOptions.DEFAULT).hits.totalHits.value == 2
+        esClient.deprecatedClient.get(new GetRequest(properties.esclient.index, "1"), RequestOptions.DEFAULT).isExists()
     }
 
     def "bulk update works when source docs contain an _index"() {
@@ -119,7 +120,7 @@ class ESClientSpec extends Specification {
         ]
         esClient.bulkInsert(data, "index-test-index")
         Thread.sleep(1000)
-        esClient.indices().flush(new FlushRequest("index-test-index"), RequestOptions.DEFAULT)
+        esClient.deprecatedClient.indices().flush(new FlushRequest("index-test-index"), RequestOptions.DEFAULT)
 
         when:
         data = [
@@ -128,17 +129,17 @@ class ESClientSpec extends Specification {
         ]
         esClient.bulk([(ESClient.BulkOps.UPDATE): data], properties.esClient.index as String)
         Thread.sleep(1000)
-        esClient.indices().flush(new FlushRequest("index-test-index"), RequestOptions.DEFAULT)
+        esClient.deprecatedClient.indices().flush(new FlushRequest("index-test-index"), RequestOptions.DEFAULT)
 
         then:
         def search = new SearchRequest(indices: ["index-test-index"])
             .source(new SearchSourceBuilder().query(new MatchAllQueryBuilder()))
 
-        esClient.search(search, RequestOptions.DEFAULT).hits.totalHits.value == 2
-        esClient.get(new GetRequest("index-test-index", "1"), RequestOptions.DEFAULT).source.bulkTest == "c"
+        esClient.deprecatedClient.search(search, RequestOptions.DEFAULT).hits.totalHits.value == 2
+        esClient.deprecatedClient.get(new GetRequest("index-test-index", "1"), RequestOptions.DEFAULT).source.bulkTest == "c"
 
         cleanup:
-        esClient.indices().delete(new DeleteIndexRequest("index-test-index"), RequestOptions.DEFAULT)
+        esClient.deprecatedClient.indices().delete(new DeleteIndexRequest("index-test-index"), RequestOptions.DEFAULT)
     }
 
     def "term query works"() {
@@ -180,7 +181,7 @@ class ESClientSpec extends Specification {
         }
         esClient.bulk([(ESClient.BulkOps.INSERT): data])
         Thread.sleep(1000)
-        esClient.indices().flush(new FlushRequest(properties.esclient.index), RequestOptions.DEFAULT)
+        esClient.deprecatedClient.indices().flush(new FlushRequest(properties.esclient.index), RequestOptions.DEFAULT)
         def sources = [
             new TermsValuesSourceBuilder("terms").field("comptest")
         ]
