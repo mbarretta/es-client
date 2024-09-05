@@ -21,16 +21,19 @@ dependencies {
         'co.elastic.logging:logback-ecs-encoder:1.2.0',
         'org.codehaus.gpars:gpars:1.2.1'
     )
-    testImplementation 'org.spockframework:spock-core:2.0-groovy-3.0'
+    testImplementation 'org.spockframework:spock-core:2.2-groovy-3.0'
+    testImplementation 'junit:junit:4.13.2'
 }
 
-task sourcesJar(type: Jar) {
-    from sourceSets.main.allSource
-    classifier = 'sources'
+java {
+    withSourcesJar()
 }
 tasks.withType(GroovyCompile) {
     groovyOptions.optimizationOptions.indy = true
 }
 artifacts {
     archives sourcesJar
+}
+tasks.named('test') {
+    useJUnitPlatform()
 }

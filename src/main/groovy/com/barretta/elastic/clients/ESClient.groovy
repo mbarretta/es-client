@@ -38,6 +38,7 @@ class ESClient {
     @Delegate
     ElasticsearchClient client
     RestHighLevelClient deprecatedClient
+    RestClient restClient
     Config config
     static enum BulkOps {
         INSERT, CREATE, UPDATE, DELETE
@@ -82,10 +83,10 @@ class ESClient {
                 }
             )
         }
-        def rct = builder.build()
-
-        client = new ElasticsearchClient(new RestClientTransport(rct, new JacksonJsonpMapper()))
-        deprecatedClient = new RestHighLevelClientBuilder(rct).setApiCompatibilityMode(true).build()
+        restClient = builder.build()
+        def transport = new RestClientTransport(restClient, new JacksonJsonpMapper())
+        client = new ElasticsearchClient(transport)
+        deprecatedClient = new RestHighLevelClientBuilder(restClient).setApiCompatibilityMode(true).build()
     }
 
     def scrollQuery(QueryBuilder query, int batchSize, Closure mapFunction) {
@@ -153,6 +154,7 @@ class ESClient {
 
     //todo: error handling - do better
     def bulk(Map<BulkOps, List<Map>> records, int size, String index = config.index) {
+        log.trace("index: [$index]")
         def builder = new BulkRequest.Builder()
 
         try {
@@ -246,6 +248,8 @@ class ESClient {
 
         } catch (e) {
             log.error("uh oh", e)
+        } finally {
+            restClient.close()
         }
     }
 
